@@ -1,0 +1,58 @@
+# 维修知识图谱本体定义
+version: 1.0
+author: RepairUser
+
+# 定义实体类型
+entity_types:
+  - name: Device
+    label: 设备型号
+    description: 具体的电子设备型号
+    attributes:
+      - model_number: 型号
+      - brand: 品牌
+
+  - name: Symptom
+    label: 故障现象
+    description: 用户观察到的设备异常表现
+    attributes:
+      - description: 现象描述
+      - severity: 严重程度
+
+  - name: Cause
+    label: 故障原因
+    description: 导致故障的根本原因（硬件/软件）
+    attributes:
+      - type: 原因类型 # 硬件/软件/人为
+      - probability: 发生概率
+
+  - name: Solution
+    label: 解决方案
+    description: 修复故障的具体操作步骤
+    attributes:
+      - steps: 操作步骤
+      - difficulty: 难度等级
+      - cost: 预估成本
+
+# 定义关系类型
+relations:
+  - name: HAS_SYMPTOM
+    from: Device
+    to: Symptom
+    description: 设备表现出某种现象
+
+  - name: CAUSES
+    from: Cause
+    to: Symptom
+    description: 原因导致现象
+
+  - name: SOLVED_BY
+    from: Cause
+    to: Solution
+    description: 原因通过方案解决
+
+  - name: LOCATED_IN
+    from: Component
+    to: Device
+    description: 元器件位于设备中
+
+
