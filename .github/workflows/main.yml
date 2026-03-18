@@ -3,17 +3,15 @@ name: 🤖 维修手册自动处理
 on:
   push:
     paths:
-      - 'raw_manuals/**'  # 监听 raw_manuals 文件夹下的所有变化
+      - 'raw_manuals/**'
 
 jobs:
   analyze_manual:
     runs-on: ubuntu-latest
     steps:
-      # 第一步：获取仓库代码
       - name: 📦 检出代码
         uses: actions/checkout@v4
 
-      # 第二步：设置 Python 环境并安装需要的库
       - name: 🔧 设置 Python 环境
         uses: actions/setup-python@v5
         with:
@@ -24,7 +22,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install PyPDF2 python-docx openpyxl pillow requests
 
-      # 第三步：运行核心脚本
       - name: 🧠 调用硅基流动分析文件
         env:
           SILICON_API_KEY: ${{ secrets.SILICON_API_KEY }}
@@ -40,25 +37,22 @@ jobs:
           from io import BytesIO
           import PyPDF2
 
-          # --- 配置区域 ---
-          RAW_DIR = "raw_manuals"      # 原始文件存放的文件夹
-          OUTPUT_DIR = "processed_data" # 处理结果输出的文件夹
+          # --- 配置 ---
+          RAW_DIR = "raw_manuals"
+          OUTPUT_DIR = "processed_data"
           API_URL = "https://api.siliconflow.cn/v1/chat/completions"
           MODEL = "Qwen/Qwen3-32B-Preview"
 
-          # 检查 API Key 是否设置
+          # 检查密钥（这一行现在是正确的）
           if not os.getenv("SILICON_API_KEY"):
               print("❌ 错误：未找到 SILICON_API_KEY 环境变量")
               sys.exit(1)
 
-          # 确保输出文件夹存在
           Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
 
           def encode_image_to_base64(image_path):
-              """将图片转换为 Base64 格式"""
               try:
                   with Image.open(image_path) as img:
-                      # 统一转换为 RGB 模式以避免 PNG 透明通道问题
                       if img.mode in ('RGBA', 'LA'):
                           img = img.convert('RGB')
                       buffered = BytesIO()
@@ -69,7 +63,6 @@ jobs:
                   return None
 
           def extract_text_from_pdf(pdf_path):
-              """从 PDF 中提取文本"""
               text = ""
               try:
                   with open(pdf_path, 'rb') as f:
@@ -83,27 +76,21 @@ jobs:
               return text
 
           def call_silicon_api(content, file_type, file_path=None):
-              """调用硅基流动 API"""
               headers = {
                   "Authorization": f"Bearer {os.getenv('SILICON_API_KEY')}",
                   "Content-Type": "application/json"
               }
 
-              # 构建消息体
               messages = [
                   {"role": "system", "content": "你是一个专业的维修手册分析助手。"}
               ]
-
               user_message = {"role": "user", "content": []}
 
-              # 根据文件类型构建 content
               if file_type == "image" and content:
-                  # 如果是图片，使用多模态格式：文本 + 图片数据
                   user_message["content"].append({"type": "text", "text": "请分析这张维修手册的图片，提取出关键的维修步骤、故障代码和注意事项。"})
                   user_message["content"].append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{content}"}})
               elif file_type == "pdf" and content.strip():
-                  # 如果是PDF，直接发送文本
-                  user_message["content"].append({"type": "text", "text": f"请分析这段维修手册的文本，提取出关键的维修步骤、故障代码和注意事项。文本内容如下：\n\n{content}"})
+                  user_message["content"].append({"type": "text", "text": f"请分析这段维修手册的文本，提取出关键的维修步骤、故障代码和注意事项。文本内容如下：\n\n{content}"}})
               else:
                   print("⚠️ 无法构建有效的 API 请求内容")
                   return None
@@ -125,7 +112,7 @@ jobs:
                   print(f"API 调用失败: {e}")
                   return "API 调用失败或返回格式错误。"
 
-          # --- 主程序逻辑 ---
+          # --- 主逻辑 ---
           print(f"🔍 正在扫描 {RAW_DIR} 文件夹...")
           raw_path = Path(RAW_DIR)
 
@@ -135,7 +122,6 @@ jobs:
 
           processed_files = 0
 
-          # 遍历文件
           for file_path in raw_path.iterdir():
               if file_path.is_file():
                   ext = file_path.suffix.lower()
@@ -144,12 +130,10 @@ jobs:
 
                   print(f"\n📄 正在处理: {file_name}")
 
-                  # 1. 根据文件类型处理内容
                   content = ""
                   file_type = ""
 
                   if ext in ['.jpg', '.jpeg', '.png', '.bmp', '.webp']:
-                      # 处理图片
                       content = encode_image_to_base64(file_path)
                       if content:
                           file_type = "image"
@@ -158,7 +142,6 @@ jobs:
                           continue
 
                   elif ext in ['.pdf']:
-                      # 处理 PDF
                       content = extract_text_from_pdf(file_path)
                       if content and content.strip():
                           file_type = "pdf"
@@ -174,13 +157,11 @@ jobs:
                       print(f"⚠️ 跳过未知文件类型: {ext}")
                       continue
 
-                  # 2. 调用 AI 分析
                   if content and file_type:
                       print("🤖 正在调用 AI 分析...")
                       analysis_result = call_silicon_api(content, file_type, file_path)
 
                       if analysis_result:
-                          # 3. 保存结果为 JSON
                           result_data = {
                               "source_file": file_name,
                               "analysis": analysis_result,
@@ -196,5 +177,6 @@ jobs:
           if processed_files == 0:
               print("ℹ️ 本次运行未处理到有效文件。")
           else:
-              print(f"\n🎉 处理完成！共处理了 {processed_files} 个文件。")
+              print(f"
+🎉 处理完成！共处理了 {processed_files} 个文件。")
           EOF
