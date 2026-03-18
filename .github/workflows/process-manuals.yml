@@ -1,0 +1,54 @@
+import os
+import requests
+
+# 1. 获取密钥和模型名
+api_key = os.getenv("SILICON_API_KEY")
+model_name = os.getenv("MODEL_NAME")
+
+if not api_key or not model_name:
+    print(" 请检查 Secrets 配置")
+    exit(1)
+
+# 2. SiliconFlow 的官方端点
+url = "https://api.siliconflow.cn/v1/chat/completions"
+
+headers = {
+    "Authorization": f"Bearer {api_key}",
+    "Content-Type": "application/json"
+}
+
+# 3. 注意这里的格式！SiliconFlow 要求必须有 content 字段，且 stop 参数格式特殊
+data = {
+    "model": model_name,
+    "messages": [
+        {
+            "role": "user",
+            "content": "你好"
+        }
+    ],
+    "max_tokens": 512,
+    # ⚠️ 关键修正：SiliconFlow 的 stop 参数必须是字符串数组，且不能传空字符串
+    "stop": ["\n"], 
+    "stream": False,
+    "temperature": 0.7
+}
+
+# 4. 发送请求
+try:
+    response = requests.post(url, headers=headers, json=data)
+    
+    # 5. 关键修正：打印原始状态码和文本，方便调试
+    print(f"状态码: {response.status_code}")
+    
+    if response.status_code == 200:
+        result = response.json()
+        # ⚠️ 关键修正：SiliconFlow 的返回文本在 choices[0]['message']['content']
+        print("✅ 调用成功！")
+        print("返回内容:", result['choices'][0]['message']['content'])
+    else:
+        # 如果失败，打印错误信息原文，这能帮我们定位问题
+        print("❌ 调用失败:", response.status_code, response.text)
+
+except Exception as e:
+    print("❌ 程序异常:", str(e))
+
