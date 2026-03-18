@@ -22,7 +22,7 @@ jobs:
       - name: 📦 安装 Python 依赖
         run: |
           python -m pip install --upgrade pip
-          pip install PyPDF2 python-docx openpyxl pillow
+          pip install PyPDF2 python-docx openpyxl pillow requests
 
       # 第三步：运行核心脚本
       - name: 🧠 调用硅基流动分析文件
@@ -75,31 +75,44 @@ jobs:
                   with open(pdf_path, 'rb') as f:
                       reader = PyPDF2.PdfReader(f)
                       for page in reader.pages:
-                          text += page.extract_text() + "\n"
+                          extracted = page.extract_text()
+                          if extracted:
+                              text += extracted + "\n"
               except Exception as e:
                   print(f"PDF 提取错误: {e}")
               return text
 
-          def call_silicon_api(content, file_type):
+          def call_silicon_api(content, file_type, file_path=None):
               """调用硅基流动 API"""
               headers = {
                   "Authorization": f"Bearer {os.getenv('SILICON_API_KEY')}",
                   "Content-Type": "application/json"
               }
 
-              # 构建提示词
-              prompt = ""
-              if file_type == "image":
-                  prompt = "请分析这张维修手册的图片，提取出关键的维修步骤、故障代码和注意事项。"
-              elif file_type == "pdf":
-                  prompt = f"请分析这段维修手册的文本，提取出关键的维修步骤、故障代码和注意事项。文本内容如下：\n\n{content}"
+              # 构建消息体
+              messages = [
+                  {"role": "system", "content": "你是一个专业的维修手册分析助手。"}
+              ]
+
+              user_message = {"role": "user", "content": []}
+
+              # 根据文件类型构建 content
+              if file_type == "image" and content:
+                  # 如果是图片，使用多模态格式：文本 + 图片数据
+                  user_message["content"].append({"type": "text", "text": "请分析这张维修手册的图片，提取出关键的维修步骤、故障代码和注意事项。"})
+                  user_message["content"].append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{content}"}})
+              elif file_type == "pdf" and content.strip():
+                  # 如果是PDF，直接发送文本
+                  user_message["content"].append({"type": "text", "text": f"请分析这段维修手册的文本，提取出关键的维修步骤、故障代码和注意事项。文本内容如下：\n\n{content}"})
+              else:
+                  print("⚠️ 无法构建有效的 API 请求内容")
+                  return None
+
+              messages.append(user_message)
 
               data = {
                   "model": MODEL,
-                  "messages": [
-                      {"role": "system", "content": "你是一个专业的维修手册分析助手。"},
-                      {"role": "user", "content": prompt}
-                  ],
+                  "messages": messages,
                   "temperature": 0.1
               }
 
@@ -141,14 +154,16 @@ jobs:
                       if content:
                           file_type = "image"
                       else:
+                          print("跳过：图片编码失败")
                           continue
 
                   elif ext in ['.pdf']:
                       # 处理 PDF
                       content = extract_text_from_pdf(file_path)
-                      if content:
+                      if content and content.strip():
                           file_type = "pdf"
                       else:
+                          print("跳过：PDF 未提取到有效文本")
                           continue
 
                   elif ext in ['.doc', '.docx', '.txt', '.xlsx']:
@@ -156,27 +171,30 @@ jobs:
                       continue
 
                   else:
-                      print(f"⚠️ 跳过未知文件类型")
+                      print(f"⚠️ 跳过未知文件类型: {ext}")
                       continue
 
                   # 2. 调用 AI 分析
                   if content and file_type:
                       print("🤖 正在调用 AI 分析...")
-                      analysis_result = call_silicon_api(content, file_type)
+                      analysis_result = call_silicon_api(content, file_type, file_path)
 
-                      # 3. 保存结果为 JSON
-                      result_data = {
-                          "source_file": file_name,
-                          "analysis": analysis_result,
-                          "timestamp": os.path.getmtime(file_path)
-                      }
+                      if analysis_result:
+                          # 3. 保存结果为 JSON
+                          result_data = {
+                              "source_file": file_name,
+                              "analysis": analysis_result,
+                              "timestamp": os.path.getmtime(file_path)
+                          }
 
-                      with open(output_file_path, 'w', encoding='utf-8') as f:
-                          json.dump(result_data, f, ensure_ascii=False, indent=2)
+                          with open(output_file_path, 'w', encoding='utf-8') as f:
+                              json.dump(result_data, f, ensure_ascii=False, indent=2)
 
-                      print(f"✅ 成功保存结果至: {output_file_path}")
-                      processed_files += 1
+                          print(f"✅ 成功保存结果至: {output_file_path}")
+                          processed_files += 1
 
-          print(f"\n🎉 处理完成！共处理了 {processed_files} 个文件。")
+          if processed_files == 0:
+              print("ℹ️ 本次运行未处理到有效文件。")
+          else:
+              print(f"\n🎉 处理完成！共处理了 {processed_files} 个文件。")
           EOF
-
