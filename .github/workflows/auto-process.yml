@@ -1,38 +1,37 @@
-name: Auto Process with Qwen3-VL-32B
+name: Auto Parse Repair Manuals
 
 on:
   push:
     paths:
       - 'uploads/**'
-      - 'raw_manuals/**'
+  workflow_dispatch:
 
 jobs:
-  process:
+  parse:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-      
-      - name: Install deps
-        run: pip install requests Pillow
-      
-      - name: Process with Qwen3-VL-32B
-        env:
-          SILICONFLOW_API_KEY: ${{ secrets.SILICONFLOW_API_KEY }}
+
+      - name: Install dependencies
         run: |
-          mkdir -p knowledge_texts processed
-          python .github/scripts/extract_text.py
-      
-      - name: Build index
-        run: python .github/scripts/build_index.py
-      
+          pip install requests
+
+      - name: Parse uploaded files
+        env:
+          SILICONFLOW_KEY: ${{ secrets.SILICONFLOW_KEY }}
+        run: |
+          python .github/scripts/parse_and_generate.py
+
       - name: Commit results
         run: |
-          git config user.name "AI-Brain"
-          git config user.email "brain@ai.local"
-          git add -A
-          git diff --staged --quiet || (git commit -m "🧠 Processed by Qwen3-VL-32B" && git push)
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add knowledge_base.json
+          git diff --staged --quiet || (git commit -m "Auto update: $(date '+%Y-%m-%d %H:%M')" && git push)
