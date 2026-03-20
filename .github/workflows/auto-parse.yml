@@ -1,0 +1,37 @@
+name: Auto Parse Repair Manuals
+
+on:
+  push:
+    paths:
+      - 'uploads/**'
+  workflow_dispatch:
+
+jobs:
+  parse:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v3
+      
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Install dependencies
+      run: |
+        pip install pymupdf python-docx pillow requests
+        
+    - name: Parse uploaded files
+      env:
+        SILICONFLOW_KEY: ${{ secrets.SILICONFLOW_KEY }}
+      run: |
+        python scripts/parse_and_generate.py
+        
+    - name: Commit results
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add knowledge_base.json
+        git diff --staged --quiet || (git commit -m "Auto update: $(date '+%Y-%m-%d %H:%M')" && git push)
