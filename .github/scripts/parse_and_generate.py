@@ -35,8 +35,8 @@ def call_vl_model(image_path):
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
     }
-
-    payload = {
+    
+    data = {
         "model": MODEL_NAME,
         "messages": [
             {
@@ -44,7 +44,7 @@ def call_vl_model(image_path):
                 "content": [
                     {
                         "type": "text",
-                        "text": "请详细分析这张维修手册图片或文档截图，提取出故障现象、原因分析和维修步骤。请用中文输出，并保持结构清晰。"
+                        "text": "请分析这张图片，提取其中的所有文字内容。如果图片包含表格，请用 Markdown 格式输出表格。请使用中文回答。"
                     },
                     {
                         "type": "image_url",
@@ -55,67 +55,41 @@ def call_vl_model(image_path):
                 ]
             }
         ],
-        "temperature": 0.7,
-        "max_tokens": 1024
+        "max_tokens": 1024,
+        "temperature": 0.7
     }
 
     try:
-        response = requests.post(API_URL, headers=headers, json=payload, timeout=60)
-        if response.status_code == 200:
-            result = response.json()
-            return result['choices'][0]['message']['content']
-        else:
-            print(f"API 请求失败: {response.status_code}, {response.text}")
-            return None
-    except Exception as e:
-        print(f"请求异常: {e}")
+        response = requests.post(API_URL, headers=headers, json=data)
+        response.raise_for_status()
+        result = response.json()
+        return result['choices'][0]['message']['content']
+    except requests.exceptions.RequestException as e:
+        print(f"API 请求失败: {e}")
         return None
 
 def main():
-    print("🚀 开始处理上传的文件...")
-    
     if not os.path.exists(UPLOADS_DIR):
-        print(f" 目录 {UPLOADS_DIR} 不存在")
+        print(f"目录不存在: {UPLOADS_DIR}")
         return
 
-    knowledge_db = {}
-    if os.path.exists(OUTPUT_FILE):
-        try:
-            with open(OUTPUT_FILE, 'r', encoding='utf-8') as f:
-                knowledge_db = json.load(f)
-        except:
-            print(" 无法读取现有知识库，将创建新的")
-
-    image_extensions = ('.png', '.jpg', '.jpeg', '.webp', '.gif')
-    new_entries = 0
-
+    results = []
     for filename in os.listdir(UPLOADS_DIR):
-        if filename.lower().endswith(image_extensions):
-            filepath = os.path.join(UPLOADS_DIR, filename)
-            print(f"🔍 正在处理: {filename}")
-            
-            if filename in knowledge_db:
-                print(f"   ➡️ 已存在，跳过")
-                continue
-
-            analysis = call_vl_model(filepath)
-            if analysis:
-                knowledge_db[filename] = {
-                    "source": f"{UPLOADS_DIR}/{filename}",
-                    "analysis": analysis,
+        if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.gif')):
+            file_path = os.path.join(UPLOADS_DIR, filename)
+            print(f"正在处理: {filename}")
+            content = call_vl_model(file_path)
+            if content:
+                results.append({
+                    "filename": filename,
+                    "content": content,
                     "processed_at": datetime.now().isoformat()
-                }
-                new_entries += 1
-                print(f"   ✅ 成功解析")
-            else:
-                print(f"   ❌ 解析失败")
+                })
 
-    if new_entries > 0:
+    if results:
         with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
-            json.dump(knowledge_db, f, ensure_ascii=False, indent=2)
-        print(f"🎉 处理完成！新增 {new_entries} 个条目，已保存到 {OUTPUT_FILE}")
-    else:
-        print("📭 没有新文件需要处理")
+            json.dump(results, f, ensure_ascii=False, indent=2)
+        print(f"处理完成, 结果已保存到 {OUTPUT_FILE}")
 
 if __name__ == "__main__":
     main()
