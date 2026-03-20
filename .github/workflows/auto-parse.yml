@@ -21,7 +21,7 @@ jobs:
         
     - name: Install dependencies
       run: |
-        pip install pymupdf python-docx pillow requests
+        pip install pymupdf python-docx requests
         
     - name: Parse uploaded files
       env:
